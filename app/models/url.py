@@ -1,5 +1,5 @@
 
-from sqlalchemy import Column, String, DateTime, Integer
+from sqlalchemy import Column, String, DateTime, Integer, func
 from datetime import datetime
 from app.database import Base
 
@@ -11,3 +11,5 @@ class URL(Base):
     short = Column(String, unique=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     clicks = Column(Integer, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    last_clicked_at = Column(DateTime(timezone=True), nullable=True)

@@ -11,6 +11,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from fastapi.responses import JSONResponse
 from app.models.url import URL
+from datetime import datetime
 from typing import List
 from nanoid import generate
 
@@ -133,6 +134,7 @@ async def get_url(
     # Increment clicks
 
     db_url.clicks += 1
+    db_url.last_clicked_at = datetime.now()
 
     await db.commit()
     await db.refresh(db_url)
