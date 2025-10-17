@@ -1,10 +1,14 @@
 
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from app.database import AsyncSessionLocal, engine, Base, init_db, get_db
 from app.schemas import URLCreateDto, URLResponseDto
 from sqlalchemy.future import select
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from fastapi.responses import JSONResponse
 from app.models.url import URL
 from nanoid import generate
 
@@ -42,6 +46,20 @@ async def generate_unique_short(db: AsyncSessionLocal, length: int = 6) -> str:
     raise HTTPException(status_code=500, detail="Failed to generate unique short URL")
 
 ##
+##  Rate Limiting
+##
+
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Rate limit exceeded. Please try again later."},
+    )
+
+##
 ##  Application
 ##
 
@@ -52,7 +70,12 @@ async def startup():
     await init_db()
 
 @app.post("/urls/", response_model=URLResponseDto)
-async def create_url(payload: URLCreateDto, db: AsyncSessionLocal = Depends(get_db)):
+@limiter.limit("10/minute")  # 10 requests per minute per IP
+async def create_url(
+    request: Request,
+    payload: URLCreateDto,
+    db: AsyncSessionLocal = Depends(get_db)
+):
     # Generate the URL ID
 
     short_id = await generate_unique_short(db)
@@ -75,7 +98,12 @@ async def create_url(payload: URLCreateDto, db: AsyncSessionLocal = Depends(get_
     return db_url
 
 @app.get("/urls/{short_id}", response_model=URLResponseDto)
-async def get_url(short_id: str, db: AsyncSessionLocal = Depends(get_db)):
+@limiter.limit("60/minute")  # 60 requests per minute per IP
+async def get_url(
+    request: Request,
+    short_id: str,
+    db: AsyncSessionLocal = Depends(get_db)
+):
     # Fetch the URL
 
     result = await db.execute(select(URL).filter(URL.short == short_id))
