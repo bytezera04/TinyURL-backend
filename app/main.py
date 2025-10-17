@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from app.database import AsyncSessionLocal, engine, Base, init_db, get_db
 from app.schemas import URLCreateDto, URLResponseDto
+from sqlalchemy.future import select
 from app.models.url import URL
 from uuid import uuid4
 import uuid
@@ -50,6 +51,30 @@ async def create_url(payload: URLCreateDto, db: AsyncSessionLocal = Depends(get_
     )
 
     db.add(db_url)
+    await db.commit()
+    await db.refresh(db_url)
+
+    # Respond with URL dto
+
+    return db_url
+
+@app.get("/urls/{short_id}", response_model=URLResponseDto)
+async def get_url(short_id: str, db: AsyncSessionLocal = Depends(get_db)):
+    # Fetch the URL
+
+    result = await db.execute(select(URL).filter(URL.short == short_id))
+
+    db_url = result.scalars().first()
+
+    # Handle not found
+
+    if not db_url:
+        raise HTTPException(status_code=404, detail="URL not found")
+    
+    # Increment clicks
+
+    db_url.clicks += 1
+
     await db.commit()
     await db.refresh(db_url)
 
