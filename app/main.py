@@ -6,8 +6,7 @@ from app.database import AsyncSessionLocal, engine, Base, init_db, get_db
 from app.schemas import URLCreateDto, URLResponseDto
 from sqlalchemy.future import select
 from app.models.url import URL
-from uuid import uuid4
-import uuid
+from nanoid import generate
 
 app = FastAPI()
 
@@ -26,6 +25,23 @@ app.add_middleware(
 )
 
 ##
+##  ID Generation
+##
+
+async def generate_unique_short(db: AsyncSessionLocal, length: int = 6) -> str:
+    """Generate a unique short ID that does not collide in the database."""
+
+    for _ in range(10):  # try max 10 times
+        short_id = generate("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ", length)
+        # Check if it exists
+        result = await db.execute(select(URL).filter(URL.short == short_id))
+        existing = result.scalars().first()
+        if not existing:
+            return short_id
+    
+    raise HTTPException(status_code=500, detail="Failed to generate unique short URL")
+
+##
 ##  Application
 ##
 
@@ -39,12 +55,12 @@ async def startup():
 async def create_url(payload: URLCreateDto, db: AsyncSessionLocal = Depends(get_db)):
     # Generate the URL ID
 
-    short_id = str(uuid.uuid4())[:6]
+    short_id = await generate_unique_short(db)
 
     # Add URL to the database
 
     db_url = URL(
-        id=str(uuid4()),
+        id=short_id,
         original=payload.original,
         short=short_id,
         clicks=0,
