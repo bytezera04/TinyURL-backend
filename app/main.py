@@ -1,15 +1,17 @@
 
-from fastapi import FastAPI, Request, HTTPException, Depends
+from fastapi import FastAPI, Request, Query, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from app.database import AsyncSessionLocal, engine, Base, init_db, get_db
 from app.schemas import URLCreateDto, URLResponseDto
 from sqlalchemy.future import select
+from sqlalchemy import desc
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from fastapi.responses import JSONResponse
 from app.models.url import URL
+from typing import List
 from nanoid import generate
 
 app = FastAPI()
@@ -96,6 +98,19 @@ async def create_url(
     # Respond with URL dto
 
     return db_url
+
+@app.get("/urls/top", response_model=List[URLResponseDto])
+@limiter.limit("30/minute")
+async def get_top_urls(
+    request: Request,
+    limit: int = Query(5, ge=1, le=100),
+    db: AsyncSessionLocal = Depends(get_db)
+):
+    result = await db.execute(select(URL).order_by(desc(URL.clicks)).limit(limit))
+
+    urls = result.scalars().all()
+
+    return urls
 
 @app.get("/urls/{short_id}", response_model=URLResponseDto)
 @limiter.limit("60/minute")  # 60 requests per minute per IP
