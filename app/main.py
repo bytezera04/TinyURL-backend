@@ -23,7 +23,7 @@ app = FastAPI()
 
 CORS_ORIGIN = [
     "http://127.0.0.1:3000", "http://localhost:3000", # dev
-    "https://tinyurldemo.dev/" # prod
+    "https://tinyurldemo.dev" # prod
 ]
 
 app.add_middleware(
